@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map with Dynamic Layers</title>
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Add hover effect on labels */
+        #controls label:hover {
+            background-color: #f8f9fa;
+            /* A subtle, lighter background color for the hover effect */
+            transform: scale(1.02);
+            /* Slight zoom-in effect */
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            /* Adds a soft shadow for depth */
+            color: #007BFF;
+            /* Change text color to a professional blue on hover */
+            cursor: pointer;
+            /* Changes the cursor to a pointer */
+            transition: background-color 0.3s ease, transform 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
+            /* Smooth transition for all changes */
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        /* Style for the control panel container */
+        #controls {
+            position: absolute;
+            top: 60px;
+            right: 0px;
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            font-family: Arial, sans-serif;
+            z-index: 1;
+            width: 200px;
+        }
+
+        /* Style for labels */
+        #controls label {
+            display: flex;
+            align-items: center;
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+            padding: 6px 9px;
+            border-radius: 5px;
+        }
+
+        /* Add hover effect on labels */
+        #controls label:hover {
+            background-color: #f0f0f0;
+            transform: scale(1.02);
+        }
+
+        /* Style for checkboxes */
+        #controls input[type="checkbox"] {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Add transitions to checkboxes for smooth effect */
+        #controls input[type="checkbox"]:checked {
+            accent-color: #1E90FF;
+            /* Modern browsers allow checkbox styling */
+            transform: scale(1.1);
+        }
+
+        label {
+            font-size: 08px;
+            display: block;
+            margin: 1px 0;
+        }
+
+
+        /* Set the background color of the header */
+        .header {
+            background-color: rgba(255, 255, 255, 0.711);
+            padding: 0px;
+            text-align: left;
+            border-bottom: 5px solid #FFA500;
+            /* Yellow-orange underline */
+        }
+
+        /* Style for the logo */
+        .logo {
+            height: 50px;
+            /* Adjust the size of the logo */
+            width: auto;
+        }
+
+        /* Optional styling for main content */
+        main {
+            padding: 0px;
+        }
+
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #555;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-overlay">Loading map layers...</div>
+    <header class="header">
+        <img src="Logo.png" alt="Logo" class="logo">
+    </header>
+    <main>
+    </main>
+    <div id="map" style="top: 60px;"></div>
+    <div id="controls">
+        <label>
+            <input type="checkbox" id="bicycleways" onclick="toggleLayer('bicycleways')"> Bicycle Ways
+        </label>
+        <label>
+            <input type="checkbox" id="cycletracks" onclick="toggleLayer('cycletracks')"> Cycle Tracks
+        </label>
+        <label>
+            <input type="checkbox" id="municipalities" onclick="toggleLayer('municipalities')"> Municipalities
+        </label>
+        <label>
+            <input type="checkbox" id="publicTransport" onclick="toggleLayer('publicTransport')"> Public Transport
+        </label>
+        <label>
+            <input type="checkbox" id="road" onclick="toggleLayer('road')"> Roads
+        </label>
+        <label>
+            <input type="checkbox" id="street" onclick="toggleLayer('street')"> Streets
+        </label>
+    </div>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js"></script>
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZGFuaXNoMTA4MyIsImEiOiJjbTAzbHh6aGwwZGFtMmpzYzhrMXJ3NzRwIn0.Chkjov2u7vRlxnsrcl7m7g';
+
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v11',
+            center: [11.723, 48.190],
+            zoom: 10
+        });
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        // Add zoom control
+        const nav = new mapboxgl.NavigationControl({
+            showZoom: true,  // Enables zoom controls
+            showCompass: false // Optional: Removes the compass
+        });
+        map.addControl(nav, 'top-left'); // Adds the zoom controls at the top-left of the map
+
+        // Function to add a new layer
+        function addLayer(layerId, sourceUrl, type, paint, layout = {}) {
+            map.addSource(layerId, {
+                type: 'geojson',
+                data: sourceUrl
+            });
+            map.addLayer({
+                id: layerId,
+                type: type,
+                source: layerId,
+                layout: { visibility: 'none', ...layout }, // Start hidden
+                paint: paint
+            });
+        }
+
+        map.on('load', () => {
+            // Add layers using the function
+            addLayer('bicycleways', './bicycle_clipped.geojson', 'line', {
+                'line-color': '#1E90FF',
+                'line-width': 1
+            });
+
+            addLayer('cycletracks', './cycletracks_clipped.geojson', 'line', {
+                'line-color': '#008000',
+                'line-width': 0.7
+            });
+
+
+
+            addLayer('municipalities', './munciplities.geojson', 'line', {
+                'line-color': '#000000',
+                'line-width': 2.1
+            });
+
+            addLayer('publicTransport', './public_transport2.geojson', 'circle', {
+                'circle-radius': 2,
+                'circle-color': '#FFD700'
+            });
+
+
+
+            addLayer('road', './road5.geojson', 'line', {
+                'line-color': '#696969',
+                'line-width': 1.4
+            });
+
+            addLayer('street', './streets2.geojson', 'line', {
+                'line-color': '#CD5C5C',
+                'line-width': 0.6
+            });
+
+            // Assume layersToAdd is defined somewhere for additional layers
+            if (typeof layersToAdd !== 'undefined') {
+                layersToAdd.forEach(layer => {
+                    addLayer(layer.id, layer.sourceUrl, layer.type, layer.paint);
+                });
+            }
+
+            console.log('All layers have been added and initialized with visibility set to none.');
+
+            // Hide loading overlay after adding all layers
+            setTimeout(() => {
+                loadingOverlay.style.display = 'none';
+            }, 500); // Give a slight delay for a better UX
+        });
+
+        // Function to toggle layer visibility
+        function toggleLayer(layerId) {
+            const visibility = map.getLayoutProperty(layerId, 'visibility');
+            if (visibility === 'visible') {
+                map.setLayoutProperty(layerId, 'visibility', 'none');
+            } else {
+                map.setLayoutProperty(layerId, 'visibility', 'visible');
+            }
+        }
+    </script>
+</body>
+
+</html>
